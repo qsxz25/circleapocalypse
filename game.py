@@ -5,7 +5,6 @@ import random
 from random import seed
 
 # Variables
-seed(1000)
 MENU = 0
 GAME = 1
 GAME_OVER = 2
@@ -25,10 +24,15 @@ volume = 0.5
 difficulty = 1
 bg_color_index = 0
 set_seed_index = 0
+game_type_index = 0
 bg_colors = ["Night", "Day"]
-difficulty_names = ["Easy", "Normal", "Hard"]
+difficulty_names = ["Easy", "Normal", "Hard", "Extreme"]
 set_seed = ["Set", "Random"]
+game_type = ["Default", "Endless"]
 
+
+texture_toggle_time = time.time()
+current_texture = True  # True for 'saw', False for 'saw2'
 screen_x = 800
 screen_y = 800
 target_x = random.randint(30, screen_x-30)
@@ -56,6 +60,7 @@ player = load_texture("img/player.png")
 bgnight = load_texture("img/bg_citynight.png")
 bgday = load_texture("img/bg_cityday.png")
 saw = load_texture("img/saw.png")
+saw2 = load_texture("img/saw2.png")
 menu_music = pyray.load_music_stream("sounds/main_menu_music.mp3")
 music = pyray.load_music_stream("sounds/game_music.mp3")
 music_distant = pyray.load_music_stream("sounds/game_music_distant.mp3")
@@ -85,6 +90,7 @@ enemies = [
 enemy_directions = [(random.choice([-1, 1]), random.choice([-1, 1])) for _ in enemies]
 last_direction_change = time.time()
 
+# Resets music when returning to menu
 def reset_music_function():
     if music_enabled == False:
         return
@@ -117,6 +123,7 @@ def draw_menu():
     
     # Instructions at bottom
     draw_text("Use UP/DOWN arrows to navigate, ENTER to select", 150, 500, 20, LIGHTGRAY)
+    draw_text("Made by Davyd, Sigge and Linus. See https://github.com/qsxz25/circleapocalypse for source code", 10, 780, 16, DARKGRAY)
 
 def get_target_count_from_difficulty():
     # Get number of targets based on difficulty
@@ -124,8 +131,10 @@ def get_target_count_from_difficulty():
         return 10
     elif difficulty == 1:  # Normal
         return 15
-    else:  # Hard
+    elif difficulty == 2:  # Hard
         return 20
+    else: # Extreme
+        return 30
 
 def get_enemy_count_from_difficulty():
     # Get number of enemies based on difficulty
@@ -133,8 +142,11 @@ def get_enemy_count_from_difficulty():
         return 3
     elif difficulty == 1:  # Normal
         return 5
-    else:  # Hard
+    elif difficulty == 2:  # Hard
         return 7
+    else: # Extreme
+        return 10
+
 
 def get_seed_index():
     # Get seed based on players chose
@@ -150,7 +162,7 @@ def draw_game():
     pyray.set_music_volume(music_distant, 0)
     # Draw the actual game
     clear_background(DARKGRAY)
-    global x, y, r, target_x, target_y, target_r, score, game_state, enemy_directions, last_direction_change, enemies, immortality_start_time, is_immortal, enemy_rec
+    global x, y, r, target_x, target_y, target_r, score, game_state, enemy_directions, last_direction_change, enemies, immortality_start_time, is_immortal, enemy_rec, texture_toggle_time, current_texture
 
     # Draw background based on setting
     if bg_color_index == 0:
@@ -172,6 +184,12 @@ def draw_game():
         enemy_directions = [(random.choice([-1, 1]), random.choice([-1, 1])) for _ in enemies]
         last_direction_change = time.time()
 
+    # Change enemy texture every [timechange] seconds
+    timechange = 0.1
+    if time.time() - texture_toggle_time > timechange:
+        current_texture = not current_texture
+        texture_toggle_time = time.time()
+
     # Drawing enemies and updating their positions
     for i in range(len(enemies)):
         enemy_x, enemy_y, enemy_r = enemies[i]
@@ -179,10 +197,14 @@ def draw_game():
         draw_circle(enemy_x, enemy_y, enemy_r, BLANK)
         enemydesc_rec.x = enemy_x - enemy_r
         enemydesc_rec.y = enemy_y - enemy_r
-        draw_texture_pro(saw,enemysource_rec,enemydesc_rec,(0,0),0, WHITE)
+        if current_texture:
+            draw_texture_pro(saw,enemysource_rec,enemydesc_rec,(0,0),0, WHITE)
+        else:
+            draw_texture_pro(saw2,enemysource_rec,enemydesc_rec,(0,0),0, WHITE)
+
         enemy_x += dx * 1
         enemy_y += dy * 1
-
+    
     # Wrapping player around the screen
         if x > screen_x:
             x = 0
@@ -212,7 +234,10 @@ def draw_game():
         target_y += random.randint(-20, 20)
         target_x = max(target_r, min(screen_x - target_r, target_x))
         target_y = max(target_r, min(screen_y - target_r, target_y))
-        r += 5
+        if game_type_index == 0:
+            r += 5
+        else:
+            r += 0
         playerdesc_rec.width = 2*r
         playerdesc_rec.height = 2*r
         score += 1
@@ -220,7 +245,9 @@ def draw_game():
         pyray.set_sound_volume(coin_sound_effect, volume/5)
     
     # Check for win condition
-    if score >= get_target_count_from_difficulty():
+    if game_type_index == 1:
+        pass
+    if game_type_index == 0 and score >= get_target_count_from_difficulty():
         print("YOU WIN!")
         game_state = WIN
 
@@ -247,8 +274,11 @@ def draw_game():
             draw_texture_pro(player,playersource_rec,playerdesc_rec,(0,0),0,WHITE) # Draw player again to cover outline
     # Draw score
     target_count = get_target_count_from_difficulty()
-    for _ in range(target_count):
-        draw_text(f"score = {score}/{target_count}",0,20,32,WHITE)
+    if game_type_index == 1:
+        draw_text(f"score = {score}",0,20,32,WHITE)
+    else:
+        for _ in range(target_count):
+            draw_text(f"score = {score}/{target_count}",0,20,32,WHITE)
         
     # Simple game message
     draw_text("Game is running! Press P for menu", 0, 0, 20, WHITE)
@@ -292,15 +322,20 @@ def draw_settings():
     f"Difficulty: {difficulty_names[difficulty]}",
     f"Change background: {bg_colors[bg_color_index]}",
     f"Seed type: {set_seed[set_seed_index]}",
+    f"Game type: {game_type[game_type_index]}",
     "",
     "Back to Menu"
     ]
 
     # Instructions at bottom
-    draw_text("Use UP/DOWN arrows to navigate, LEFT/RIGHT arrows OR ENTER to select", 100, 500, 18, LIGHTGRAY)
+    draw_text("Use UP/DOWN arrows to navigate, LEFT/RIGHT arrows OR ENTER to select", 75, 600, 18, LIGHTGRAY)
+    if game_type_index == 1:
+        draw_text("Endless game type: you will not grow bigger, collect as much targets as you can!", 50, 650, 18, DARKGRAY)
+    else:
+        draw_text("Default game type: you will grow bigger with each target, collect all targets to win!", 50, 650, 18, DARKGRAY)
 
     for i, setting in enumerate(settings_options):
-        if i == 5:  # Skip empty line
+        if i == 6:  # Skip empty line
             continue
             
         color = YELLOW if i == settings_selected_option else WHITE
@@ -444,19 +479,19 @@ def handle_game_input():
 
 def handle_settings_input():
     # Handle input in settings screen
-    global settings_selected_option, music_enabled, volume, difficulty, bg_color_index, game_state, set_seed_index
+    global settings_selected_option, music_enabled, volume, difficulty, bg_color_index, game_state, set_seed_index, game_type_index
     
     if is_key_pressed(KEY_UP):
         play_sound(select_sound_effect)
-        settings_selected_option = (settings_selected_option - 1) % 7
-        if settings_selected_option == 5:  # Skip empty line
-            settings_selected_option = 4
+        settings_selected_option = (settings_selected_option - 1) % 8
+        if settings_selected_option == 6:  # Skip empty line
+            settings_selected_option = 5
     
     if is_key_pressed(KEY_DOWN):
         play_sound(select_sound_effect)
-        settings_selected_option = (settings_selected_option + 1) % 7
-        if settings_selected_option == 5:  # Skip empty line
-            settings_selected_option = 6
+        settings_selected_option = (settings_selected_option + 1) % 8
+        if settings_selected_option == 6:  # Skip empty line
+            settings_selected_option = 7
     
     if is_key_pressed(KEY_LEFT):
         play_sound(select_sound_effect)
@@ -473,11 +508,13 @@ def handle_settings_input():
         elif settings_selected_option == 1:  # Volume
             volume = max(0.0, volume - 0.1)            
         elif settings_selected_option == 2:  # Difficulty
-            difficulty = (difficulty - 1) % 3
+            difficulty = (difficulty - 1) % 4
         elif settings_selected_option == 3:  # Background
             bg_color_index = (bg_color_index - 1) % 2
         elif settings_selected_option == 4:
             set_seed_index = (set_seed_index- 1) % 2
+        elif settings_selected_option == 5:
+            game_type_index = (game_type_index - 1) % 2
 
     if is_key_pressed(KEY_RIGHT):
         play_sound(select_sound_effect)
@@ -494,15 +531,17 @@ def handle_settings_input():
         elif settings_selected_option == 1:  # Volume
             volume = min(1.0, volume + 0.1)
         elif settings_selected_option == 2:  # Difficulty
-            difficulty = (difficulty + 1) % 3
+            difficulty = (difficulty + 1) % 4
         elif settings_selected_option == 3:  # Background
             bg_color_index = (bg_color_index + 1) % 2
         elif settings_selected_option == 4:
             set_seed_index = (set_seed_index + 1) % 2
+        elif settings_selected_option == 5:
+            game_type_index = (game_type_index + 1) % 2
     
     if is_key_pressed(KEY_ENTER):
         play_sound(select_sound_effect)
-        if settings_selected_option == 6:  # Back to Menu
+        if settings_selected_option == 7:  # Back to Menu
             game_state = MENU
     
     return True
@@ -545,6 +584,8 @@ while running and not window_should_close():
 pyray.unload_texture(bgday)
 pyray.unload_texture(bgnight)
 pyray.unload_texture(saw)
+pyray.unload_texture(saw2)
+pyray.unload_texture(player)
 pyray.unload_music_stream(music)
 pyray.unload_music_stream(music_distant)
 pyray.unload_music_stream(menu_music)
